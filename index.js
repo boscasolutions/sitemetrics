@@ -49,6 +49,19 @@ io.on('connect', (socket) => {
   tail4.on("line", function(data) {
     io.emit('log', data);
   });
+
+  tail1.on("error", function(error) {
+    console.log('ERROR: ', error);
+  });
+  tail2.on("error", function(error) {
+    console.log('ERROR: ', error);
+  });
+  tail3.on("error", function(error) {
+    console.log('ERROR: ', error);
+  });
+  tail4.on("error", function(error) {
+    console.log('ERROR: ', error);
+  });
  
   tail1.watch()
   tail2.watch()
