@@ -32,6 +32,8 @@ const io = require('socket.io')(server, {
 
 io.on('connect', (socket) => {
 
+  console.log('Client connected');
+
   tail1 = new Tail(`/etc/bosca/logs/log-server-net2-${today}.log`);
   tail2 = new Tail(`/etc/bosca/logs/log-server-suprema-${today}.log`);
   tail3 = new Tail(`/etc/bosca/logs/messaging-endpoint-${today}.log`);
@@ -73,6 +75,7 @@ io.on('connect', (socket) => {
   });
 
   socket.on('disconnect', function () {
+    console.log('Client disconnected');
     tail1.unwatch()
     tail2.unwatch()
     tail3.unwatch()
