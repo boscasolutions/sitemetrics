@@ -30,51 +30,48 @@ const io = require('socket.io')(server, {
   }
 });
 
+var clients = 0;
+
 tail1 = new Tail(`/etc/bosca/logs/log-server-net2-${today}.log`);
+tail2 = new Tail(`/etc/bosca/logs/log-server-suprema-${today}.log`);
+tail3 = new Tail(`/etc/bosca/logs/messaging-endpoint-${today}.log`);
+tail4 = new Tail(`/etc/bosca/logs/webapi-${today}.log`);
 
 tail1.on("line", function(data) {
+  io.emit('log', data);
+});
+tail2.on("line", function(data) {
+  io.emit('log', data);
+});
+tail3.on("line", function(data) {
+  io.emit('log', data);
+});
+tail4.on("line", function(data) {
   io.emit('log', data);
 });
 
 tail1.on("error", function(error) {
   console.log('ERROR: ', error);
 });
+tail2.on("error", function(error) {
+  console.log('ERROR: ', error);
+});
+tail3.on("error", function(error) {
+  console.log('ERROR: ', error);
+});
+tail4.on("error", function(error) {
+  console.log('ERROR: ', error);
+});
 
 io.on('connect', (socket) => {
-
   console.log('Client connected');
-  
-  // tail2 = new Tail(`/etc/bosca/logs/log-server-suprema-${today}.log`);
-  // tail3 = new Tail(`/etc/bosca/logs/messaging-endpoint-${today}.log`);
-  // tail4 = new Tail(`/etc/bosca/logs/webapi-${today}.log`);
-
-
-  // tail2.on("line", function(data) {
-  //   io.emit('log', data);
-  // });
-  // tail3.on("line", function(data) {
-  //   io.emit('log', data);
-  // });
-  // tail4.on("line", function(data) {
-  //   io.emit('log', data);
-  // });
-
-
-  // tail2.on("error", function(error) {
-  //   console.log('ERROR: ', error);
-  // });
-  // tail3.on("error", function(error) {
-  //   console.log('ERROR: ', error);
-  // });
-  // tail4.on("error", function(error) {
-  //   console.log('ERROR: ', error);
-  // });
- 
-  tail1.watch()
-  // tail2.watch()
-  // tail3.watch()
-  // tail4.watch()
-
+  if(clients == 0) {
+    tail1.watch()
+    tail2.watch()
+    tail3.watch()
+    tail4.watch()
+  }
+  clients++;
 })
 
 io.on('error', function(error) {
@@ -83,10 +80,13 @@ io.on('error', function(error) {
 
 io.on('disconnect', function () {
   console.log('Client disconnected');
-  tail1.unwatch()
-  // tail2.unwatch()
-  // tail3.unwatch()
-  // tail4.unwatch()
+  clients--;
+  if(clients == 0) {
+    tail1.unwatch()
+    tail2.unwatch()
+    tail3.unwatch()
+    tail4.unwatch()
+  }
 });
 
 app.get("/metrics", [keycloak.protect()], async ( req, res, next) => {
