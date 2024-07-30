@@ -4,7 +4,7 @@ keycloakSettings = require('/etc/bosca/keycloak.json');
 
 const config = {
   "realm": keycloakSettings.realm,
-  "auth-server-url": keycloakSettings.auth-server-url,
+  "auth-server-url": keycloakSettings["auth-server-url"],
   "ssl-required": "external",
   "resource": keycloakSettings.resource,
   "bearer-only": true
