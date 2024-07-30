@@ -67,7 +67,11 @@ io.on('connect', (socket) => {
   tail2.watch()
   tail3.watch()
   tail4.watch()
-  
+
+  socket.on('error', function(error) {
+    console.log('ERROR: ', error);
+  });
+
   socket.on('disconnect', function () {
     tail1.unwatch()
     tail2.unwatch()
