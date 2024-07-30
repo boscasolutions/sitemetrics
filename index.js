@@ -77,12 +77,11 @@ io.on('connect', (socket) => {
 
 })
 
-
-socket.on('error', function(error) {
+io.on('error', function(error) {
   console.log('ERROR: ', error);
 });
 
-socket.on('disconnect', function () {
+io.on('disconnect', function () {
   console.log('Client disconnected');
   tail1.unwatch()
   // tail2.unwatch()
