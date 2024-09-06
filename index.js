@@ -4,9 +4,11 @@ const si = require('systeminformation');
 const express = require("express");
 const keycloak = require('./keycloak');
 Tail = require('tail').Tail;
+var https = require('https');
+
+shieldSettings = require('/etc/bosca/settings.json');
 
 const port = 3008;
-shieldVersion = require('/etc/bosca/version.json');
 
 var rightNow = new Date();
 var today = rightNow.toISOString().slice(0,10).replace(/-/g,"");
@@ -93,8 +95,20 @@ app.get("/metrics", [keycloak.protect()], async ( req, res, next) => {
   si.getDynamicData(function(data) {
     si.osInfo(function(osInfo) {
       data.osInfo = osInfo;
+      shieldVersion = require('/etc/bosca/version.json');
       data.siteVersion = shieldVersion.version;
-      res.json(data);
+        try {
+          https.get(shieldSettings.Net2ApiHubBaseURL, function(response) {
+            data.net2Status = response.statusCode;
+            res.json(data);
+          }).on('error', function(e) {
+            data.net2Status = 400;
+            res.json(data);
+          });
+        } catch (error) {
+          data.net2Status = 400;
+          res.json(data);
+        }
     });
   });
 });
