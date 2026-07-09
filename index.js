@@ -3,15 +3,13 @@ const cors = require('cors');
 const si = require('systeminformation');
 const express = require("express");
 const keycloak = require('./keycloak');
-Tail = require('tail').Tail;
+const fs = require('fs');
+const Tail = require('tail').Tail;
 var https = require('https');
 
 shieldSettings = require('/etc/bosca/settings.json');
 
 const port = 3008;
-
-var rightNow = new Date();
-var today = rightNow.toISOString().slice(0,10).replace(/-/g,"");
 
 const errorHandler = (error, req, res, next) => {
   const status = error.status || 422;
@@ -34,61 +32,98 @@ const io = require('socket.io')(server, {
 
 var clients = 0;
 
-tail1 = new Tail(`/etc/bosca/logs/log-server-net2-${today}.log`);
-tail2 = new Tail(`/etc/bosca/logs/log-server-suprema-${today}.log`);
-tail3 = new Tail(`/etc/bosca/logs/messaging-endpoint-${today}.log`);
-tail4 = new Tail(`/etc/bosca/logs/webapi-${today}.log`);
+const LOG_DIR = '/etc/bosca/logs';
+const LOG_SOURCES = [
+  'log-server-net2',
+  'log-server-suprema',
+  'messaging-endpoint',
+  'webapi',
+];
 
-tail1.on("line", function(data) {
-  io.emit('log', data);
-});
-tail2.on("line", function(data) {
-  io.emit('log', data);
-});
-tail3.on("line", function(data) {
-  io.emit('log', data);
-});
-tail4.on("line", function(data) {
-  io.emit('log', data);
-});
+// Poll for log files that don't exist yet (e.g. right after a date rollover)
+// before giving up. Prevents crashing when a day's log hasn't been created.
+const FILE_RETRY_MS = 10000;
+// How often to check whether the calendar day has rolled over.
+const ROLLOVER_CHECK_MS = 60000;
 
-tail1.on("error", function(error) {
-  console.log('ERROR: ', error);
-});
-tail2.on("error", function(error) {
-  console.log('ERROR: ', error);
-});
-tail3.on("error", function(error) {
-  console.log('ERROR: ', error);
-});
-tail4.on("error", function(error) {
-  console.log('ERROR: ', error);
-});
+let activeTails = [];
+let currentDay = null;
 
-io.on('connect', (socket) => {
-  console.log('Client connected');
-  if(clients == 0) {
-    tail1.watch()
-    tail2.watch()
-    tail3.watch()
-    tail4.watch()
+function dayStamp(date = new Date()) {
+  return date.toISOString().slice(0, 10).replace(/-/g, '');
+}
+
+function stopTails() {
+  for (const tail of activeTails) {
+    try {
+      tail.unwatch();
+    } catch (error) {
+      console.log('Failed to unwatch tail: ', error);
+    }
   }
+  activeTails = [];
+}
+
+// Start tailing a single file. If it doesn't exist yet (the Tail constructor
+// throws on a missing file), retry until it appears — as long as we're still
+// on the same day it was scheduled for.
+function tailFile(filePath, day) {
+  if (day !== currentDay) {
+    return;
+  }
+
+  if (!fs.existsSync(filePath)) {
+    setTimeout(() => tailFile(filePath, day), FILE_RETRY_MS);
+    return;
+  }
+
+  try {
+    const tail = new Tail(filePath, { follow: true });
+    tail.on('line', function(data) {
+      io.emit('log', data);
+    });
+    tail.on('error', function(error) {
+      console.log('Tail ERROR: ', filePath, error);
+    });
+    activeTails.push(tail);
+    console.log('Tailing ', filePath);
+  } catch (error) {
+    console.log('Failed to start tail, will retry: ', filePath, error.message);
+    setTimeout(() => tailFile(filePath, day), FILE_RETRY_MS);
+  }
+}
+
+// (Re)initialise the tails for the current calendar day.
+function startTailsForToday() {
+  stopTails();
+  currentDay = dayStamp();
+  for (const source of LOG_SOURCES) {
+    tailFile(`${LOG_DIR}/${source}-${currentDay}.log`, currentDay);
+  }
+}
+
+startTailsForToday();
+
+// Re-create the tails when the date changes so we always follow today's logs.
+setInterval(function() {
+  if (dayStamp() !== currentDay) {
+    console.log('Date rollover detected, reinitialising log tails');
+    startTailsForToday();
+  }
+}, ROLLOVER_CHECK_MS);
+
+io.on('connection', (socket) => {
   clients++;
-})
+  console.log('Client connected. Active clients: ', clients);
 
-io.on('error', function(error) {
-  console.log('ERROR: ', error);
-});
+  socket.on('disconnect', function() {
+    clients--;
+    console.log('Client disconnected. Active clients: ', clients);
+  });
 
-io.on('disconnect', function () {
-  console.log('Client disconnected');
-  clients--;
-  if(clients == 0) {
-    tail1.unwatch()
-    tail2.unwatch()
-    tail3.unwatch()
-    tail4.unwatch()
-  }
+  socket.on('error', function(error) {
+    console.log('Socket ERROR: ', error);
+  });
 });
 
 app.get("/metrics", [keycloak.protect()], async ( req, res, next) => {
