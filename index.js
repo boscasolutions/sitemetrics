@@ -45,6 +45,9 @@ const LOG_SOURCES = [
 const FILE_RETRY_MS = 10000;
 // How often to check whether the calendar day has rolled over.
 const ROLLOVER_CHECK_MS = 60000;
+// Max time to wait on the Net2 API hub before treating it as unavailable, so
+// an unreachable hub can't stall the /metrics response indefinitely.
+const NET2_TIMEOUT_MS = 5000;
 
 let activeTails = [];
 let currentDay = null;
@@ -132,17 +135,25 @@ app.get("/metrics", [keycloak.protect()], async ( req, res, next) => {
       data.osInfo = osInfo;
       shieldVersion = require('/etc/bosca/version.json');
       data.siteVersion = shieldVersion.version;
+        // Respond even if the Net2 hub is unreachable. Without a timeout a
+        // hanging connection (host down / network change) leaves the request
+        // open forever and the whole metrics view — including logs — never
+        // loads. 'error' only fires on refused/DNS failures, not silent hangs.
         try {
-          https.get(shieldSettings.Net2ApiHubBaseURL, function(response) {
+          const net2Req = https.get(shieldSettings.Net2ApiHubBaseURL, { timeout: NET2_TIMEOUT_MS }, function(response) {
             data.net2Status = response.statusCode;
-            res.json(data);
-          }).on('error', function(e) {
+            if (!res.headersSent) res.json(data);
+          });
+          net2Req.on('timeout', function() {
+            net2Req.destroy();
+          });
+          net2Req.on('error', function(e) {
             data.net2Status = 400;
-            res.json(data);
+            if (!res.headersSent) res.json(data);
           });
         } catch (error) {
           data.net2Status = 400;
-          res.json(data);
+          if (!res.headersSent) res.json(data);
         }
     });
   });
