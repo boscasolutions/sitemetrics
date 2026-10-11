@@ -37,6 +37,8 @@ const LOG_SOURCES = [
   'log-server-net2',
   'log-server-suprema',
   'messaging-endpoint',
+  'messaging-eventsync-endpoint',
+  'messaging-priority-endpoint',
   'webapi',
 ];
 
