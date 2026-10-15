@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (Node ${{ matrix.node }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # 18 is what sites run today (Ubuntu 24.04 `apt install nodejs`);
+        # 20 and 22 catch breakage ahead of a runtime upgrade.
+        node: [18, 20, 22]
+    env:
+      # chromedriver is an optional transitive dependency; skip its binary download.
+      CHROMEDRIVER_SKIP_DOWNLOAD: 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      # Same install the sites use.
+      - run: npm ci --omit=dev --no-audit --no-fund
+
+      - run: npm test
